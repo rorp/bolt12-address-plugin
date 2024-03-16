@@ -1,6 +1,6 @@
 # BOLT12 Address Plugin
 
-This [Eclair](https://github.com/ACINQ/eclair) plugin allows to pay to human-readable LN addresses using BOLT12 offers stored in DNS TXT records.
+This [Eclair](https://github.com/ACINQ/eclair) plugin allows to pay to human-readable [LN addresses using BOLT12 offers stored in DNS TXT records](https://github.com/bitcoin/bips/pull/1551).
 
 It should be treated as a POC, because the BOLT12 address specification is not yet finalized, and the BOLT12 interoperability 
 between Linting implementations is not at production level.
