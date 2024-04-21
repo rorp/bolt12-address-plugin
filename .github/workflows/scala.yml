@@ -27,9 +27,6 @@ jobs:
       with:
         java-version: 11
         distribution: 'adopt'
-        
-    - name: Build Ecalir
-      run: git clone https://github.com/ACINQ/eclair.git; cd eclair/; git checkout v0.10.0; mvn install -DskipTests=true
 
     - name: Cache Maven dependencies
       uses: actions/cache@v3
@@ -37,6 +34,9 @@ jobs:
         path: ~/.m2
         key: ${{ runner.os }}-m2-${{ hashFiles('**/pom.xml') }}
         restore-keys: ${{ runner.os }}-m2
+
+    - name: Build Ecalir
+      run: git clone https://github.com/ACINQ/eclair.git; cd eclair/; git checkout v0.10.0; mvn install -DskipTests=true
 
     - name: Run tests
       run: mvn test
