@@ -27,6 +27,9 @@ jobs:
       with:
         java-version: 11
         distribution: 'adopt'
+        
+    - name: Build Ecalir
+      run: git clone https://github.com/ACINQ/eclair.git; cd eclair/; git checkout v0.10.0; mvn install -DskipTests=true
 
     - name: Cache Maven dependencies
       uses: actions/cache@v3
