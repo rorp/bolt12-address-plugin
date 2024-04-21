@@ -8,16 +8,22 @@ import grizzled.slf4j.Logging
 class Bolt12AddressPlugin extends Plugin with RouteProvider with Logging {
 
   private var paymentHandler: PaymentHandler = _
+  private var offerFetcher: OfferFetcher = _
 
   override def params: PluginParams = new PluginParams {
     override def name: String = "Bolt12AddressPlugin"
   }
 
-  override def onSetup(setup: Setup): Unit = ()
+  override def onSetup(setup: Setup): Unit = {
+  }
 
   override def onKit(kit: Kit): Unit = {
+    import kit.system.dispatcher
+    offerFetcher = new DnsOverHttps(kit.nodeParams.socksProxy_opt)
     paymentHandler = PaymentHandler(kit)
   }
 
-  override def route(eclairDirectives: EclairDirectives): Route = ApiHandlers.registerRoutes(paymentHandler, eclairDirectives)
+  override def route(eclairDirectives: EclairDirectives): Route = {
+    ApiHandlers.registerRoutes(paymentHandler, eclairDirectives, offerFetcher)
+  }
 }
