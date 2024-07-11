@@ -16,5 +16,6 @@ case class Bolt12Address(address: String) {
 }
 
 object Bolt12Address {
-  val Prefix = "bitcoin:b12="
+  val Prefix = "bitcoin:?lno="
+  val LegacyPrefix = "bitcoin:b12="
 }

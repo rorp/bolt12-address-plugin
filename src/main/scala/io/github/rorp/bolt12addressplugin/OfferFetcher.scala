@@ -12,7 +12,7 @@ import sttp.model.{HeaderNames, Uri}
 import java.net.InetSocketAddress
 import scala.concurrent.duration.{Duration, DurationInt, FiniteDuration}
 import scala.concurrent.{Await, ExecutionContext, Future}
-import scala.util.Try
+import scala.util.{Failure, Try}
 
 trait OfferFetcher {
   def fetchOffer(bolt12Address: Bolt12Address): Future[Offer]
@@ -34,18 +34,32 @@ class Dns extends OfferFetcher {
       for {
         domainName <- bolt12Address.toDomainName
         dnsResponse <- Try(DnssecResolverApi.INSTANCE.resolve(domainName, classOf[TXT]))
-        offerStr <- extractOfferString(dnsResponse)
-        offer <- Offer.decode(offerStr)
+        offerStrings <- extractOfferStrings(dnsResponse)
+        parsedOffers = offerStrings.map(Offer.decode)
+        offer <- (parsedOffers.find(_.isSuccess) match {
+          case Some(tryOffer) => tryOffer
+          case None => parsedOffers.find(_.isFailure).get
+        })
       } yield offer)
   }
 
-  private def extractOfferString(resolverResult: ResolverResult[TXT]): Try[String] = Try {
+  private def extractOfferStrings(resolverResult: ResolverResult[TXT]): Try[Seq[String]] = Try {
     val answers = resolverResult.getAnswers
     if (answers.isEmpty) throw new RuntimeException("DNS response was empty")
-    if (answers.size > 1) throw new RuntimeException("too many DNS records")
-    val txt = answers.iterator().next().getText
-    if (!txt.startsWith(Bolt12Address.Prefix)) throw new RuntimeException(s"invalid DNS data: `$txt`")
-    txt.substring(Bolt12Address.Prefix.length)
+    val iter = answers.iterator()
+    var res = List[String]()
+    while (iter.hasNext) {
+      val txt = iter.next().getText
+      val offerString = if (txt.startsWith(Bolt12Address.Prefix)) {
+        txt.substring(Bolt12Address.Prefix.length)
+      } else if (txt.startsWith(Bolt12Address.LegacyPrefix)) {
+        txt.substring(Bolt12Address.LegacyPrefix.length)
+      } else {
+        throw new RuntimeException(s"invalid DNS data: `$txt`")
+      }
+      res = offerString :: res
+    }
+    res
   }
 }
 
@@ -57,19 +71,26 @@ class DnsOverHttps(socksProxy_opt: Option[Socks5ProxyParams])(implicit ec: Execu
 
   private val sttp = createSttpBackend(socksProxy_opt)
 
-
-  private def extractOfferString(body: String): Try[String] = Try {
+  private def extractOfferStrings(body: String): Try[Seq[String]] = Try {
     import io.github.rorp.bolt12addressplugin.DnsOverHttps.DnsResponse
     val serialization = org.json4s.jackson.Serialization
     implicit val formats = org.json4s.DefaultFormats
     val json = serialization.read[DnsResponse](body)
-    val txt = {
-      val data = json.Answer.headOption.getOrElse(throw new RuntimeException(s"invalid DNS response: $json")).data
-      val data1 = if (data.startsWith("\"")) data.tail else data
-      if (data1.endsWith("\"")) data1.init else data1
+    val res = json.Answer.map { data =>
+      val txt = {
+        val data = json.Answer.headOption.getOrElse(throw new RuntimeException(s"invalid DNS response: $json")).data
+        val data1 = if (data.startsWith("\"")) data.tail else data
+        if (data1.endsWith("\"")) data1.init else data1
+      }
+      if (txt.startsWith(Bolt12Address.Prefix)) {
+        txt.substring(Bolt12Address.Prefix.length)
+      } else if (txt.startsWith(Bolt12Address.LegacyPrefix)) {
+        txt.substring(Bolt12Address.LegacyPrefix.length)
+      } else {
+        throw new RuntimeException(s"invalid DNS data: `$txt`")
+      }
     }
-    if (!txt.startsWith(Bolt12Address.Prefix)) throw new RuntimeException(s"invalid DNS data: `$txt`")
-    txt.substring(Bolt12Address.Prefix.length)
+    res
   }
 
   override def fetchOffer(bolt12Address: Bolt12Address): Future[Offer] = {
@@ -82,8 +103,12 @@ class DnsOverHttps(socksProxy_opt: Option[Socks5ProxyParams])(implicit ec: Execu
     } yield {
       if (!response.code.isSuccess) throw new RuntimeException(s"Error performing DNS query: status code ${response.code}")
       val body = response.body.getOrElse(throw new RuntimeException(s"Error performing DNS query: invalid body ${response.body}"))
-      val offer = extractOfferString(body).flatMap(Offer.decode)
-      offer.get
+      val offerStrings = extractOfferStrings(body).get
+      val parsedOffers = offerStrings.map(Offer.decode)
+      parsedOffers.find(_.isSuccess) match {
+        case Some(tryOffer) => tryOffer.get
+        case None => parsedOffers.find(_.isFailure).get.get
+      }
     }
   }
 
