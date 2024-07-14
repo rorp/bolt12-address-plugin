@@ -1,9 +1,5 @@
 package io.github.rorp.bolt12addressplugin
 
-import fr.acinq.eclair.wire.protocol.OfferTypes.Offer
-import org.minidns.hla.{DnssecResolverApi, ResolverResult}
-import org.minidns.record.TXT
-
 import scala.util.Try
 
 case class Bolt12Address(address: String) {

@@ -12,7 +12,7 @@ import sttp.model.{HeaderNames, Uri}
 import java.net.InetSocketAddress
 import scala.concurrent.duration.{Duration, DurationInt, FiniteDuration}
 import scala.concurrent.{Await, ExecutionContext, Future}
-import scala.util.{Failure, Try}
+import scala.util.Try
 
 trait OfferFetcher {
   def fetchOffer(bolt12Address: Bolt12Address): Future[Offer]
@@ -57,7 +57,7 @@ class Dns extends OfferFetcher {
       } else {
         throw new RuntimeException(s"invalid DNS data: `$txt`")
       }
-      res = offerString :: res
+      res = offerString.replace(" / ", "") :: res
     }
     res
   }
@@ -70,28 +70,6 @@ class DnsOverHttps(socksProxy_opt: Option[Socks5ProxyParams])(implicit ec: Execu
   val ReadTimeout: FiniteDuration = 10.seconds
 
   private val sttp = createSttpBackend(socksProxy_opt)
-
-  private def extractOfferStrings(body: String): Try[Seq[String]] = Try {
-    import io.github.rorp.bolt12addressplugin.DnsOverHttps.DnsResponse
-    val serialization = org.json4s.jackson.Serialization
-    implicit val formats = org.json4s.DefaultFormats
-    val json = serialization.read[DnsResponse](body)
-    val res = json.Answer.map { data =>
-      val txt = {
-        val data = json.Answer.headOption.getOrElse(throw new RuntimeException(s"invalid DNS response: $json")).data
-        val data1 = if (data.startsWith("\"")) data.tail else data
-        if (data1.endsWith("\"")) data1.init else data1
-      }
-      if (txt.startsWith(Bolt12Address.Prefix)) {
-        txt.substring(Bolt12Address.Prefix.length)
-      } else if (txt.startsWith(Bolt12Address.LegacyPrefix)) {
-        txt.substring(Bolt12Address.LegacyPrefix.length)
-      } else {
-        throw new RuntimeException(s"invalid DNS data: `$txt`")
-      }
-    }
-    res
-  }
 
   override def fetchOffer(bolt12Address: Bolt12Address): Future[Offer] = {
     val parametrizedUri = BaseUri.addParam("name", bolt12Address.toDomainName.get).addParam("type", "TXT")
@@ -110,6 +88,29 @@ class DnsOverHttps(socksProxy_opt: Option[Socks5ProxyParams])(implicit ec: Execu
         case None => parsedOffers.find(_.isFailure).get.get
       }
     }
+  }
+
+  private def extractOfferStrings(body: String): Try[Seq[String]] = Try {
+    import io.github.rorp.bolt12addressplugin.DnsOverHttps.DnsResponse
+    val serialization = org.json4s.jackson.Serialization
+    implicit val formats = org.json4s.DefaultFormats
+    val json = serialization.read[DnsResponse](body)
+    val answer = json.Answer.filter(_.`type` == 16) // TXT
+    if (answer.isEmpty) throw new RuntimeException(s"invalid DNS response: $json")
+    val res = answer.map { dns =>
+      val txt = {
+        val data = dns.data
+        data.replace("\"", "")
+      }
+      if (txt.startsWith(Bolt12Address.Prefix)) {
+        txt.substring(Bolt12Address.Prefix.length)
+      } else if (txt.startsWith(Bolt12Address.LegacyPrefix)) {
+        txt.substring(Bolt12Address.LegacyPrefix.length)
+      } else {
+        throw new RuntimeException(s"invalid DNS data: `$txt`")
+      }
+    }
+    res
   }
 
   private def createSttpBackend(socksProxy_opt: Option[Socks5ProxyParams]): SttpBackend[Future, _] = {

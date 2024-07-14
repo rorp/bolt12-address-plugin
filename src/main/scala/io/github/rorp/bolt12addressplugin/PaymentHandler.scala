@@ -26,26 +26,26 @@ case class PaymentHandler(appKit: Kit) {
   private val externalIdMaxLength = 66
 
   def payOffer(offer: Offer,
-                        amount: MilliSatoshi,
-                        quantity: Long,
-                        externalId_opt: Option[String],
-                        maxAttempts_opt: Option[Int],
-                        maxFeeFlat_opt: Option[Satoshi],
-                        maxFeePct_opt: Option[Double],
-                        pathFindingExperimentName_opt: Option[String],
-                        connectDirectly: Boolean)(implicit timeout: Timeout): Future[UUID] = {
+               amount: MilliSatoshi,
+               quantity: Long,
+               externalId_opt: Option[String],
+               maxAttempts_opt: Option[Int],
+               maxFeeFlat_opt: Option[Satoshi],
+               maxFeePct_opt: Option[Double],
+               pathFindingExperimentName_opt: Option[String],
+               connectDirectly: Boolean)(implicit timeout: Timeout): Future[UUID] = {
     payOfferInternal(offer, amount, quantity, None, Nil, externalId_opt, maxAttempts_opt, maxFeeFlat_opt, maxFeePct_opt, pathFindingExperimentName_opt, connectDirectly, blocking = false).mapTo[UUID]
   }
 
   def payOfferBlocking(offer: Offer,
-                                amount: MilliSatoshi,
-                                quantity: Long,
-                                externalId_opt: Option[String],
-                                maxAttempts_opt: Option[Int],
-                                maxFeeFlat_opt: Option[Satoshi],
-                                maxFeePct_opt: Option[Double],
-                                pathFindingExperimentName_opt: Option[String],
-                                connectDirectly: Boolean)(implicit timeout: Timeout): Future[PaymentEvent] = {
+                       amount: MilliSatoshi,
+                       quantity: Long,
+                       externalId_opt: Option[String],
+                       maxAttempts_opt: Option[Int],
+                       maxFeeFlat_opt: Option[Satoshi],
+                       maxFeePct_opt: Option[Double],
+                       pathFindingExperimentName_opt: Option[String],
+                       connectDirectly: Boolean)(implicit timeout: Timeout): Future[PaymentEvent] = {
     payOfferInternal(offer, amount, quantity, None, Nil, externalId_opt, maxAttempts_opt, maxFeeFlat_opt, maxFeePct_opt, pathFindingExperimentName_opt, connectDirectly, blocking = true).mapTo[PaymentEvent]
   }
 
